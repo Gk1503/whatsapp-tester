@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WA Tester</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">WA</span>
+      <span class="brand-name">Tester</span>
+    </div>
+
+    <div class="signal" id="signal">
+      <div class="signal-rings"><div class="signal-dot"></div></div>
+      <div class="signal-text">
+        <div class="signal-label" id="stateLabel">Starting…</div>
+        <div class="signal-sub" id="stateSub">–</div>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-tab="contacts">Contacts</button>
+      <button class="nav-item" data-tab="compose">Send message</button>
+      <button class="nav-item" data-tab="log">Live log</button>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- QR / connect screen -->
+    <section id="connectScreen" class="connect-screen">
+      <div class="connect-card">
+        <h1>Connect WhatsApp</h1>
+        <p class="muted">Open WhatsApp on your phone → Linked Devices → Link a device, then scan.</p>
+        <div class="qr-box" id="qrBox">
+          <div class="qr-placeholder" id="qrPlaceholder">Waiting for QR code…</div>
+          <img id="qrImage" alt="WhatsApp QR code" style="display:none" />
+        </div>
+        <div class="muted small" id="connectHint">This can take a few seconds on first start.</div>
+      </div>
+    </section>
+
+    <!-- App screens (shown once connected) -->
+    <section id="appScreens" class="app-screens" style="display:none">
+
+      <div class="tab-panel active" data-panel="contacts">
+        <div class="panel-header">
+          <h2>Contacts</h2>
+          <input type="text" id="contactSearch" placeholder="Search name or number…" />
+        </div>
+        <div class="contact-list" id="contactList"></div>
+      </div>
+
+      <div class="tab-panel" data-panel="compose">
+        <div class="panel-header">
+          <h2>Send message</h2>
+        </div>
+
+        <div class="compose-grid">
+          <div class="field">
+            <label>Recipients</label>
+            <div class="chips" id="chips"></div>
+            <div class="add-number-row">
+              <input type="text" id="manualNumber" placeholder="Add number with country code, e.g. 91987xxxxxxx" />
+              <button id="addNumberBtn" class="btn-ghost">Add</button>
+            </div>
+            <div class="hint">Tip: click contacts on the left to add them here too.</div>
+          </div>
+
+          <div class="field">
+            <label>Message</label>
+            <textarea id="messageBox" rows="6" placeholder="Type your message…"></textarea>
+          </div>
+
+          <div class="field inline">
+            <label>Delay between sends</label>
+            <input type="number" id="delaySeconds" value="2" min="0" style="width:80px" />
+            <span class="hint">seconds (keeps sending human-paced)</span>
+          </div>
+
+          <button id="sendBtn" class="btn-primary">Send</button>
+
+          <div class="results" id="sendResults"></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="log">
+        <div class="panel-header">
+          <h2>Live incoming log</h2>
+        </div>
+        <div class="log-list" id="logList">
+          <div class="muted">Incoming messages will appear here while this page is open.</div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
