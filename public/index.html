@@ -28,6 +28,7 @@
     <nav class="nav" id="nav">
       <button class="nav-item active" data-tab="chats">Chats</button>
       <button class="nav-item" data-tab="contacts">Contacts</button>
+      <button class="nav-item" data-tab="groups">Groups</button>
       <button class="nav-item" data-tab="compose">Send message</button>
       <button class="nav-item" data-tab="bulk">Bulk (Excel)</button>
       <button class="nav-item" data-tab="scheduler">Scheduler</button>
@@ -89,6 +90,42 @@
           <input type="text" id="contactSearch" placeholder="Search name or number…" />
         </div>
         <div class="contact-list" id="contactList"></div>
+      </div>
+
+      <div class="tab-panel" data-panel="groups">
+        <div class="panel-header">
+          <h2>Groups</h2>
+          <input type="text" id="groupSearch" placeholder="Search groups…" />
+        </div>
+
+        <div class="compose-grid">
+          <div class="field">
+            <label>Select groups (<span id="groupSelectedCount">0</span> selected)</label>
+            <div class="contact-list" id="groupListEl">
+              <div class="muted" style="padding:16px">Loading groups…</div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Selected groups</label>
+            <div class="chips" id="groupChips"></div>
+          </div>
+
+          <div class="field">
+            <label>Message</label>
+            <textarea id="groupMessageBox" rows="5" placeholder="Type your message…"></textarea>
+          </div>
+
+          <div class="field inline">
+            <label>Delay between sends</label>
+            <input type="number" id="groupDelaySeconds" value="3" min="0" style="width:80px" />
+            <span class="hint">seconds (keeps sending human-paced)</span>
+          </div>
+
+          <button id="groupSendBtn" class="btn-primary" disabled>Send to selected groups</button>
+
+          <div class="results" id="groupResults"></div>
+        </div>
       </div>
 
       <div class="tab-panel" data-panel="compose">

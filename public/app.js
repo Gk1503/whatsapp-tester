@@ -15,6 +15,18 @@ const panels = document.querySelectorAll('.tab-panel');
 const contactSearch = document.getElementById('contactSearch');
 const contactList = document.getElementById('contactList');
 
+const groupSearch = document.getElementById('groupSearch');
+const groupListEl = document.getElementById('groupListEl');
+const groupSelectedCount = document.getElementById('groupSelectedCount');
+const groupChips = document.getElementById('groupChips');
+const groupMessageBox = document.getElementById('groupMessageBox');
+const groupDelaySeconds = document.getElementById('groupDelaySeconds');
+const groupSendBtn = document.getElementById('groupSendBtn');
+const groupResults = document.getElementById('groupResults');
+
+let groupListData = [];
+let selectedGroups = new Map(); // id -> name
+
 const chipsEl = document.getElementById('chips');
 const manualNumber = document.getElementById('manualNumber');
 const addNumberBtn = document.getElementById('addNumberBtn');
@@ -118,6 +130,7 @@ socket.on('state', ({ state, qr, reason }) => {
     appScreens.style.display = 'block';
     loadContacts();
     loadChats();
+    loadGroups();
   } else {
     connectScreen.style.display = 'flex';
     appScreens.style.display = 'none';
@@ -185,6 +198,102 @@ let searchTimer;
 contactSearch.addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => loadContacts(contactSearch.value), 250);
+});
+
+// ---------- Groups ----------
+
+async function loadGroups(search = '') {
+  try {
+    const res = await fetch(`/api/chats?search=${encodeURIComponent(search)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load groups');
+    groupListData = data.filter((c) => c.isGroup);
+    renderGroupList();
+  } catch (err) {
+    groupListEl.innerHTML = `<div class="muted" style="padding:16px">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+let groupSearchTimer;
+groupSearch.addEventListener('input', () => {
+  clearTimeout(groupSearchTimer);
+  groupSearchTimer = setTimeout(() => loadGroups(groupSearch.value), 250);
+});
+
+function toggleGroupSelection(id, name) {
+  if (selectedGroups.has(id)) selectedGroups.delete(id);
+  else selectedGroups.set(id, name);
+  renderGroupList();
+  renderGroupChips();
+}
+
+function renderGroupList() {
+  if (groupListData.length === 0) {
+    groupListEl.innerHTML = '<div class="muted" style="padding:16px">No groups found.</div>';
+    return;
+  }
+
+  groupListEl.innerHTML = '';
+  groupListData.forEach((g) => {
+    const row = document.createElement('div');
+    row.className = 'contact-row' + (selectedGroups.has(g.id) ? ' selected' : '');
+    row.innerHTML = `
+      <span class="contact-name">${escapeHtml(g.name)}</span>
+      <span class="contact-number">${g.unreadCount ? g.unreadCount + ' unread' : ''}</span>
+    `;
+    row.addEventListener('click', () => toggleGroupSelection(g.id, g.name));
+    groupListEl.appendChild(row);
+  });
+}
+
+function renderGroupChips() {
+  groupSelectedCount.textContent = selectedGroups.size;
+  groupSendBtn.disabled = selectedGroups.size === 0;
+
+  groupChips.innerHTML = '';
+  selectedGroups.forEach((name, id) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${escapeHtml(name)} <button aria-label="Remove">×</button>`;
+    chip.querySelector('button').addEventListener('click', () => toggleGroupSelection(id, name));
+    groupChips.appendChild(chip);
+  });
+}
+
+groupSendBtn.addEventListener('click', async () => {
+  const groupIds = Array.from(selectedGroups.keys());
+  const message = groupMessageBox.value.trim();
+
+  if (groupIds.length === 0 || !message) {
+    groupResults.innerHTML = '<div class="result-row error">Select at least one group and write a message.</div>';
+    return;
+  }
+
+  groupSendBtn.disabled = true;
+  groupSendBtn.textContent = 'Sending…';
+  groupResults.innerHTML = '';
+
+  try {
+    const res = await fetch('/api/send-groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupIds, message, delaySeconds: Number(groupDelaySeconds.value) || 0 })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Send failed');
+
+    groupResults.innerHTML = data.results
+      .map((r) => {
+        const name = selectedGroups.get(r.id) || r.id;
+        return `<div class="result-row ${r.status}">${escapeHtml(name)} — ${r.status.replace(/_/g, ' ')}</div>`;
+      })
+      .join('');
+  } catch (err) {
+    groupResults.innerHTML = `<div class="result-row error">${escapeHtml(err.message)}</div>`;
+  } finally {
+    groupSendBtn.disabled = selectedGroups.size === 0;
+    groupSendBtn.textContent = 'Send to selected groups';
+  }
 });
 
 // ---------- Recipients / chips ----------

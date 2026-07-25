@@ -2,3 +2,4 @@ node_modules/
 session/
 .env
 schedules.json
+.wwebjs_cache/

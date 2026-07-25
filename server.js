@@ -9,7 +9,7 @@ const XLSX = require('xlsx');
 const { Server } = require('socket.io');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5050;
 
 const app = express();
 const server = http.createServer(app);
@@ -272,6 +272,34 @@ app.post('/api/chats/:id/send', async (req, res) => {
     console.error('chat send error:', err);
     res.status(500).json({ error: 'Failed to send message' });
   }
+});
+
+app.post('/api/send-groups', async (req, res) => {
+  if (connectionState !== 'ready') {
+    return res.status(409).json({ error: 'WhatsApp is not connected yet' });
+  }
+
+  const { groupIds, message, delaySeconds } = req.body;
+  if (!Array.isArray(groupIds) || groupIds.length === 0 || !message) {
+    return res.status(400).json({ error: 'groupIds[] and message are required' });
+  }
+
+  const delayMs = Math.max(0, Number(delaySeconds) || 0) * 1000;
+  const results = [];
+
+  // Group IDs are already valid WhatsApp chat IDs (xxxx@g.us) straight from the chat
+  // list, so — unlike /api/send — there's no getNumberId() phone-number lookup needed.
+  for (const groupId of groupIds) {
+    try {
+      await client.sendMessage(groupId, message);
+      results.push({ id: groupId, status: 'sent' });
+    } catch (err) {
+      results.push({ id: groupId, status: 'error', detail: err.message });
+    }
+    if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+  }
+
+  res.json({ results });
 });
 
 app.post('/api/send', async (req, res) => {
