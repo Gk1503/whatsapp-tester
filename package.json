@@ -8,8 +8,10 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "multer": "^2.2.0",
+    "qrcode": "^1.5.3",
     "socket.io": "^4.7.5",
     "whatsapp-web.js": "^1.26.0",
-    "qrcode": "^1.5.3"
+    "xlsx": "^0.18.5"
   }
 }

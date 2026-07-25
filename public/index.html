@@ -26,8 +26,11 @@
     </div>
 
     <nav class="nav" id="nav">
-      <button class="nav-item active" data-tab="contacts">Contacts</button>
+      <button class="nav-item active" data-tab="chats">Chats</button>
+      <button class="nav-item" data-tab="contacts">Contacts</button>
       <button class="nav-item" data-tab="compose">Send message</button>
+      <button class="nav-item" data-tab="bulk">Bulk (Excel)</button>
+      <button class="nav-item" data-tab="scheduler">Scheduler</button>
       <button class="nav-item" data-tab="log">Live log</button>
     </nav>
   </aside>
@@ -51,7 +54,36 @@
     <!-- App screens (shown once connected) -->
     <section id="appScreens" class="app-screens" style="display:none">
 
-      <div class="tab-panel active" data-panel="contacts">
+      <div class="tab-panel active" data-panel="chats">
+        <div class="chat-shell">
+          <div class="chat-list-pane">
+            <div class="chat-list-header">
+              <input type="text" id="chatSearch" placeholder="Search chats…" />
+            </div>
+            <div class="chat-list" id="chatListEl">
+              <div class="muted" style="padding:16px">Loading chats…</div>
+            </div>
+          </div>
+          <div class="chat-main-pane">
+            <div class="chat-empty" id="chatEmptyState">
+              <div class="muted">Select a chat to start messaging</div>
+            </div>
+            <div class="chat-thread" id="chatThread" style="display:none">
+              <div class="chat-thread-header">
+                <div class="chat-avatar" id="chatHeaderAvatar"></div>
+                <div class="chat-thread-title" id="chatHeaderName"></div>
+              </div>
+              <div class="chat-messages" id="chatMessages"></div>
+              <div class="chat-input-row">
+                <input type="text" id="chatInput" placeholder="Type a message" autocomplete="off" />
+                <button id="chatSendBtn" class="btn-primary">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="contacts">
         <div class="panel-header">
           <h2>Contacts</h2>
           <input type="text" id="contactSearch" placeholder="Search name or number…" />
@@ -89,6 +121,124 @@
           <button id="sendBtn" class="btn-primary">Send</button>
 
           <div class="results" id="sendResults"></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="bulk">
+        <div class="panel-header">
+          <h2>Bulk send from Excel/CSV</h2>
+        </div>
+
+        <div class="compose-grid">
+          <div class="field">
+            <label>Spreadsheet</label>
+            <div class="add-number-row">
+              <input type="file" id="sheetFile" accept=".xlsx,.xls,.csv" />
+              <button id="uploadSheetBtn" class="btn-ghost">Upload &amp; preview</button>
+            </div>
+            <div class="hint">
+              Columns: <strong>Name</strong>, <strong>Number</strong> (with country code), <strong>Message</strong> — one row per recipient, each row can have its own message.
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Message template</label>
+            <div class="template-row">
+              <div class="template-editor">
+                <textarea id="bulkDefaultMessage" rows="6" placeholder="Used for rows that have no Message column value… drag or click a field on the right to insert it, e.g. Hi {Name}!"></textarea>
+                <div class="hint">Fills in every blank row below — drag or click a field to insert a placeholder like <code>{Name}</code>, personalized per row. Used for sending and for the downloadable sheet.</div>
+              </div>
+              <div class="template-fields" id="bulkFieldsPanel" style="display:none">
+                <div class="template-fields-title">Fields from your sheet</div>
+                <div id="bulkFieldsEl"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field inline">
+            <label>Delay between sends</label>
+            <input type="number" id="bulkDelaySeconds" value="2" min="0" style="width:80px" />
+            <span class="hint">seconds (keeps sending human-paced)</span>
+          </div>
+
+          <div class="field" id="bulkPreviewField" style="display:none">
+            <label>Preview (<span id="bulkRowCount">0</span> recipients)</label>
+            <div class="bulk-table-wrap">
+              <table class="bulk-table" id="bulkTable">
+                <thead>
+                  <tr><th>Name</th><th>Number</th><th>Message</th><th></th></tr>
+                </thead>
+                <tbody id="bulkTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bulk-actions">
+            <button id="bulkSendBtn" class="btn-primary" disabled>Send to all</button>
+            <button id="downloadSheetBtn" class="btn-ghost" disabled>Download filled sheet (.xlsx)</button>
+          </div>
+
+          <div class="results" id="bulkResults"></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="scheduler">
+        <div class="panel-header">
+          <h2>Schedule a message</h2>
+        </div>
+
+        <div class="compose-grid">
+          <div class="field">
+            <label>Recipients</label>
+            <div class="chips" id="schedChips"></div>
+            <div class="add-number-row">
+              <input type="text" id="schedManualNumber" placeholder="Add number with country code, e.g. 91987xxxxxxx" />
+              <button id="schedAddNumberBtn" class="btn-ghost">Add</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Message</label>
+            <textarea id="schedMessage" rows="4" placeholder="Type your message…"></textarea>
+          </div>
+
+          <div class="field inline">
+            <label>Send at</label>
+            <input type="datetime-local" id="schedDateTime" />
+          </div>
+
+          <div class="field inline">
+            <label>Delay between recipients</label>
+            <input type="number" id="schedDelaySeconds" value="2" min="0" style="width:80px" />
+            <span class="hint">seconds</span>
+          </div>
+
+          <div class="field">
+            <label><input type="checkbox" id="schedRepeatEnabled" /> Repeat</label>
+            <div class="repeat-row" id="repeatRow" style="display:none">
+              <span class="hint">Every</span>
+              <input type="number" id="schedEveryValue" value="1" min="1" style="width:60px" />
+              <select id="schedEveryUnit">
+                <option value="minutes">minutes</option>
+                <option value="hours">hours</option>
+                <option value="days">days</option>
+                <option value="weeks">weeks</option>
+              </select>
+              <span class="hint">until (optional)</span>
+              <input type="datetime-local" id="schedRepeatUntil" />
+            </div>
+          </div>
+
+          <button id="scheduleBtn" class="btn-primary">Schedule message</button>
+
+          <div class="results" id="scheduleFormResult"></div>
+        </div>
+
+        <div class="panel-header" style="margin-top:28px">
+          <h2>Upcoming &amp; recent</h2>
+        </div>
+        <div class="schedule-list" id="scheduleList">
+          <div class="muted" style="padding:16px">No scheduled messages yet.</div>
         </div>
       </div>
 
