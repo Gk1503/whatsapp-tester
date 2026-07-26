@@ -20,7 +20,7 @@ module.exports = function scheduleRoutes(scheduler) {
     validate({ body: createScheduleBody }),
     (req, res, next) => {
       try {
-        const schedule = scheduler.create(req.body);
+        const schedule = scheduler.create({ ...req.body, createdBy: req.user.username });
         recordAudit({
           actor: req.user.username,
           action: 'schedule_create',

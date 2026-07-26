@@ -1,51 +1,56 @@
-# Roadmap — deferred from the foundational-slice session
+# Roadmap
 
-This session (see `docs/ARCHITECTURE.md` for what shipped) implemented the highest-leverage subset of a much larger request: config/mode system, transport abstraction + MockTransport, single-user auth, RBAC scaffold, input validation, tiered rate limiting, security headers, structured + audit logging, centralized errors, health endpoints, TEST MODE visibility, graceful shutdown, a baseline benchmark, and 29 automated tests.
+Full gate-by-gate status lives in `docs/COMPLETION_MATRIX.md`. This file is the narrative version — what's done, why, and what's next, staged by what unlocks the most for the following session (not by the original numbering of either mega-spec this project has worked through).
 
-Everything below is explicitly **not done yet** — staged by what unlocks the most for the next session, not by the original phase numbering.
+## Done
 
-## Stage A — Durability & data integrity
-- Migrate `schedules.json` to the existing SQLite DB (transactional, atomic, survives partial writes) — preserve existing schedules during migration.
-- Durable job queue for large sends: API creates a job and returns immediately; a worker processes it; progress/results persisted and pushed over Socket.IO (`queued/running/paused/completed/partially_completed/failed/cancelled`).
-- Idempotency keys for `/api/send`, `/api/send-groups`, `/api/send-bulk`, and scheduled fires — prevent duplicate sends from double-clicks or client retries.
-- Bounded exponential backoff + jitter for transient send failures; never retry permanent failures indefinitely.
-- Backup/restore procedure for the SQLite DB; explicit exclusion of `./session` from any general backup tooling.
-- Data retention policy for audit logs, job results, benchmark artifacts, and temporary uploads (currently in-memory only via multer, already not persisted to disk — verify this stays true as the job queue is added).
+- **Foundational slice** (session 1): config/mode system, transport abstraction + MockTransport, single-user auth, RBAC scaffold, input validation, tiered rate limiting, security headers, structured + audit logging, health endpoints, TEST MODE visibility, graceful shutdown, baseline benchmark, 29 tests.
+- **Durability core** (session 2, this one): durable job engine (`lib/jobs/` — transactional claiming verified correct across separate processes, retry with bounded backoff+jitter, circuit breaker, bounded concurrency/backpressure), SQLite-backed scheduler (schedules.json retired and migrated automatically), exactly-once job creation for scheduled occurrences (verified with real race/restart tests), an OWNER/ADMIN-only outbound kill switch (durable, audited, verified live), opt-in idempotency keys on the three synchronous send routes, crash recovery for stale job claims (verified by inducing it), extended graceful shutdown (drains the job worker), `uncaughtException` handling, `busy_timeout` + `npm run db:check`, xlsx replacement re-evaluated with a real trial install and rejected with evidence. 31 new tests (60 total), before/after benchmark comparison with an honestly-explained regression.
 
-## Stage B — Multi-user & account management
-- UI + routes for creating/managing ADMIN/OPERATOR/VIEWER accounts (the `lib/rbac.js` permission map already supports this; only account-management surface is missing).
-- Password rotation / reset flow.
-- Per-actor audit log viewer in the app (currently DB-query-only).
-- Session/account management: list active sessions, force-logout, a proper "Disconnect WhatsApp / Invalidate Session" route wired to the already-implemented `Transport.disconnect()`.
-- Global OWNER-only emergency stop (disable all outbound operations; queued jobs pause; audit-logged on activate/deactivate).
+## Next up — Stage: Jobs UI + converting the synchronous send routes
 
-## Stage C — Testing depth
-- Full Phase-59-equivalent test suite: integration tests per route (not just the security-critical sample this session covered), Socket.IO integration tests, scheduler restart/recovery tests, upload edge-case tests.
-- Fuzz testing for the spreadsheet parser, template resolver, phone-number normalizer, and every zod schema — bounded runtime/memory/input-size, must fail controllably, never crash the process.
-- API security test suite: unauthenticated access, wrong role, malformed JSON, oversized bodies/arrays, prototype-pollution payloads, XSS payloads, path-traversal strings, invalid upload types — expand what `test/validation.test.js`/`test/auth.test.js` started into a dedicated suite.
-- Load/soak/burst/chaos testing against MockTransport: gradual concurrency ramp to find the actual saturation point (this session only sampled 1/10/50 connections — see `docs/CAPACITY.md`), 15–60 minute soak runs watching for memory growth, sudden burst simulation, and chaos scenarios (simulated transport disconnect, DB unavailable/locked, corrupted schedule data, worker crash, slow/timeout transport responses).
-- Larger synthetic datasets for benchmarking: 1k/10k/50k contacts, 1k/10k/50k bulk rows, 100/1k/10k schedules, 1/10/50/100/500 concurrent Socket.IO clients.
+The durable job engine exists and is proven (via the scheduler), but `/api/send`, `/api/send-groups`, and `/api/send-bulk` still execute synchronously in the request handler. Converting them to create-a-job-and-return is the highest-value remaining item, but it requires a minimal Jobs view (job list, per-item status, pause/resume/cancel) so the Send/Bulk/Groups tabs don't regress into "click Send, see nothing." Do both together, not one without the other.
 
-## Stage D — CI & supply chain
-- CI pipeline (GitHub Actions or equivalent, free tier): lint, `npm test`, `npm audit`, secret scanning, a production-config-validation smoke test — all against MockTransport, no real WhatsApp account ever required in CI.
-- Static security analysis (ESLint security rules and/or Semgrep community rules) as a repeatable local + CI command.
-- Formal `npm run security` command bundling audit + secret scan + static analysis, matching the pattern `npm test`/`npm run benchmark` already established.
-- Resolve or formally document the current `npm audit` findings (see `docs/SECURITY_AUDIT.md`) — most trace to `whatsapp-web.js`'s `archiver` dependency and `xlsx`'s unpatched prototype-pollution/ReDoS advisories.
+- Convert `/api/send`, `/api/send-groups`, `/api/send-bulk` to `jobService.createJob(...)`, returning `{ jobId }` immediately.
+- Minimal Jobs/Operations view: job list with status/progress, per-item results (success/skipped/permanent-failure/transient-failure-exhausted), pause/resume/cancel controls, live updates via a new `jobUpdate` Socket.IO event (bridged the same way `scheduleUpdate` already is).
+- Retry-failed-items: a new job containing just the eligible failed items from a prior one, with `originalJobId`/`retryJobId` lineage — not mutating the historical job.
 
-## Stage E — Deeper spreadsheet/input hardening
-- Decompressed-size check independent of the row-count cap (a small malicious file could still expand significantly in memory before `enforceSheetLimits()` runs against the parsed result).
-- External-link / formula-handling review inside `XLSX.read` itself (today's mitigation is on the *output* side — `neutralizeFormula()` — not the *input* parse side).
-- Consider a maintained alternative to `xlsx` if one emerges without the current advisories; otherwise keep isolating/capping as the primary mitigation.
+## Stage: Multi-user & account management
 
-## Stage F — Isolation & deployment hardening
-- Puppeteer/Chromium sandboxing review: the app still launches with `--no-sandbox` (unchanged from the original), because enabling the OS sandbox reliably across arbitrary host environments (especially inside a container) needs deliberate testing this session didn't have room for. Next step: evaluate running Chromium with its sandbox enabled where the host supports it, or move Chromium into its own hardened container (non-root, read-only root FS, tmpfs, dropped capabilities, `no-new-privileges`, seccomp/AppArmor profile) with the HTTP-facing process as a separate trust boundary.
-- Hardened Docker setup for the whole app (non-root user, minimal base image, resource limits, no Docker socket, no host networking) — explicitly never mounting the real `./session` into a benchmark/test container.
-- Reverse-proxy guidance: HTTPS termination, trusted-proxy configuration (`app.set('trust proxy', ...)` is currently `false` — safe default, but needs a real value documented for anyone deploying behind nginx/Caddy/etc.), CORS allowlist if this is ever exposed beyond one browser.
+- UI + routes for creating/managing ADMIN/OPERATOR/VIEWER accounts (`lib/rbac.js` already models this).
+- Password rotation/reset flow.
+- Session management: list active sessions, force-logout, revoke-all-other-sessions.
+- Optional TOTP-based MFA for OWNER/ADMIN (hashed recovery codes, standard interoperable TOTP, no SMS dependency).
+- A proper "Disconnect WhatsApp / Invalidate Session" route wired to the already-implemented `Transport.disconnect()`.
 
-## Stage G — Verification artifacts
-- Postman collection and/or curl script pack covering the full API surface (auth, status, contacts, chats, messages, jobs once they exist, bulk dry-run, schedules, health, deliberate authorization/validation/rate-limit failures) — defaulted to localhost + mock transport, no credentials embedded.
-- `npm run verify` composite command (lint + test + security + integration + sandbox smoke test) once the above pieces exist — not created this session since several of its inputs (lint config, full integration suite) don't exist yet either.
-- Before/after benchmark comparison once Stage A/C land — this session's `benchmarks/baseline/` run is the reference point.
+## Stage: Testing depth & security tooling
+
+- Full adversarial API/Socket.IO test suite (unauthenticated/wrong-role/expired-session/CSRF/prototype-pollution/path-traversal/oversized-payload matrix) beyond the focused set this session added for the new job/scheduler/kill-switch surface.
+- Fuzz testing for the spreadsheet parser, template resolver, phone normalizer, and every zod schema.
+- Secret scanning (e.g. Gitleaks) + SAST (ESLint security rules and/or Semgrep) as repeatable local commands, then a CI gate.
+- Load/soak/burst/chaos testing: this session's benchmark reruns still only sample 1/10/50 connections — real saturation-point discovery (gradual ramp until an inflection point appears), 15–60 minute soak runs, burst simulation, and chaos scenarios (DB locked, worker exception, transport timeout) remain undone.
+- Larger synthetic datasets for benchmarking (1k/10k/50k contacts/bulk rows, 100/1k/10k schedules, concurrent Socket.IO clients).
+- A tunable/adaptive job-worker poll interval (back off when idle) to recover the throughput cost documented in `docs/CAPACITY.md`'s before/after comparison.
+
+## Stage: Observability
+
+- Structured metrics beyond logs: queue depth, active jobs, job throughput/failure rate, scheduler lag, event-loop delay, exposed via an authenticated health/status surface (not a public dashboard).
+- Security event monitoring surfaced to OWNER/ADMIN (failed-login bursts, lockouts, authorization failures, CSRF failures, rate-limit violations) — the audit log already records these; this is about making them visible without a DB query.
+- Tamper-evident audit log (hash-chaining) + an `npm run audit:verify` command + an in-app audit viewer with filtering/pagination.
+
+## Stage: Operational hardening
+
+- Backup/restore command pair for the SQLite DB (explicitly excluding `./session`), tested by an actual backup → destroy → restore → verify cycle.
+- Data retention policies for completed jobs, job events, audit logs, benchmark artifacts.
+- Puppeteer/Chromium sandboxing review — still launches with `--no-sandbox`, unchanged from the original app; re-enabling the OS sandbox needs host-specific testing.
+- HTTP hardening (request/header timeouts, trusted-proxy configuration for anyone deploying behind a reverse proxy).
+- Docker/container hardening — **explicitly deferred**, not part of this project's current phase per direct instruction, revisit only when asked.
+
+## Stage: Verification artifacts
+
+- Postman collection / curl script pack covering the full API surface, defaulted to localhost + mock transport, no embedded credentials.
+- `npm run security` (bundling secret scan + SAST + dependency audit) and `npm run verify` (lint + tests + security + integration + sandbox smoke test) — blocked on the tooling above existing first.
 
 ## Explicitly out of scope until asked for again
-Anything not listed above from the original 70-phase request — e.g. a full campaign/job UX with pause/resume/cancel controls, command-palette/keyboard-shortcut power-user features, frontend virtualization for very large lists — is not planned proactively; revisit if/when the underlying capability (job queue, larger real datasets) actually exists to justify it.
+
+Docker/Kubernetes, Redis or any distributed queue (SQLite has shown no evidence of being inadequate for this single-node tool), frontend virtualization for very large lists (no evidence yet that current datasets need it), a command palette or other power-user UI features not tied to a specific reliability/security gap.

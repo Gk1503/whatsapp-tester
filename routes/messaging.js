@@ -5,6 +5,8 @@ const { validate, sendBody, sendGroupsBody } = require('../lib/validation/schema
 const rateLimit = require('../lib/rateLimit');
 const { TransportUnavailableError } = require('../lib/errors');
 const { recordAudit } = require('../lib/audit');
+const { requireOutboundEnabled } = require('../lib/killSwitch');
+const { idempotent } = require('../lib/idempotency');
 
 module.exports = function messagingRoutes(transport) {
   const router = express.Router();
@@ -13,6 +15,8 @@ module.exports = function messagingRoutes(transport) {
     '/send',
     rateLimit.send,
     requirePermission(PERMISSIONS.SEND_MESSAGE),
+    requireOutboundEnabled,
+    idempotent('send'),
     validate({ body: sendBody }),
     async (req, res, next) => {
       const { numbers, message, delaySeconds } = req.body;
@@ -38,6 +42,8 @@ module.exports = function messagingRoutes(transport) {
     '/send-groups',
     rateLimit.bulk,
     requirePermission(PERMISSIONS.SEND_GROUPS),
+    requireOutboundEnabled,
+    idempotent('send-groups'),
     validate({ body: sendGroupsBody }),
     async (req, res, next) => {
       const { groupIds, message, delaySeconds } = req.body;

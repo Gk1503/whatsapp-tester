@@ -399,6 +399,33 @@ body {
 
 .test-mode-banner.visible { display: flex; justify-content: center; }
 
+.kill-switch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgba(192, 54, 44, 0.12);
+  border: 1px solid rgba(192, 54, 44, 0.35);
+}
+
+.kill-switch-panel[hidden] { display: none; }
+
+.kill-switch-status {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--danger);
+}
+
+.kill-switch-status.is-enabled { color: var(--success); }
+
+.kill-switch-toggle {
+  align-self: stretch;
+  justify-content: center;
+}
+
 .sidebar-footer {
   margin-top: auto;
   display: flex;

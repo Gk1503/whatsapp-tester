@@ -25,6 +25,8 @@ async function bootstrapSession() {
   const statusRes = await apiFetch('/api/status');
   const status = await statusRes.json();
   document.getElementById('testModeBanner').classList.toggle('visible', status.transportMode === 'mock');
+
+  loadKillSwitchState();
 }
 
 bootstrapSession();
@@ -32,6 +34,49 @@ bootstrapSession();
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   await apiFetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/login.html';
+});
+
+// ---------- Outbound kill switch (OWNER/ADMIN only) ----------
+
+const killSwitchPanel = document.getElementById('killSwitchPanel');
+const killSwitchStatus = document.getElementById('killSwitchStatus');
+const killSwitchToggle = document.getElementById('killSwitchToggle');
+
+function renderKillSwitchState(state) {
+  killSwitchPanel.hidden = false;
+  const disabled = !!state.disabled;
+  killSwitchStatus.textContent = disabled ? 'Outbound: DISABLED' : 'Outbound: enabled';
+  killSwitchStatus.classList.toggle('is-enabled', !disabled);
+  killSwitchToggle.textContent = disabled ? 'Re-enable outbound' : 'Disable outbound';
+  killSwitchToggle.classList.toggle('btn-danger', !disabled);
+  killSwitchToggle.classList.toggle('btn-secondary', disabled);
+}
+
+async function loadKillSwitchState() {
+  try {
+    const res = await apiFetch('/api/admin/kill-switch');
+    if (!res.ok) return; // 403 for non-OWNER/ADMIN roles — panel stays hidden
+    renderKillSwitchState(await res.json());
+  } catch {
+    // panel stays hidden if the check itself fails
+  }
+}
+
+killSwitchToggle.addEventListener('click', async () => {
+  const currentlyDisabled = killSwitchStatus.textContent.includes('DISABLED');
+  const nextDisabled = !currentlyDisabled;
+  const reason = nextDisabled ? window.prompt('Reason for disabling all outbound messaging (optional):') || '' : '';
+  killSwitchToggle.disabled = true;
+  try {
+    const res = await apiFetch('/api/admin/kill-switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disabled: nextDisabled, reason })
+    });
+    if (res.ok) renderKillSwitchState(await res.json());
+  } finally {
+    killSwitchToggle.disabled = false;
+  }
 });
 
 const socket = io();
@@ -346,7 +391,7 @@ groupSendBtn.addEventListener('click', async () => {
   try {
     const res = await apiFetch('/api/send-groups', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
       body: JSON.stringify({ groupIds, message, delaySeconds: Number(groupDelaySeconds.value) || 0 })
     });
     const data = await res.json();
@@ -427,7 +472,7 @@ sendBtn.addEventListener('click', async () => {
   try {
     const res = await apiFetch('/api/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
       body: JSON.stringify({ numbers, message, delaySeconds: Number(delaySeconds.value) || 0 })
     });
     const data = await res.json();
@@ -570,7 +615,7 @@ bulkSendBtn.addEventListener('click', async () => {
   try {
     const res = await apiFetch('/api/send-bulk', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
       body: JSON.stringify({
         rows: bulkRows,
         defaultMessage,

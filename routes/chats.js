@@ -5,6 +5,7 @@ const { validate, searchQuery, idParam, messageBody } = require('../lib/validati
 const rateLimit = require('../lib/rateLimit');
 const { TransportUnavailableError, NotFoundError } = require('../lib/errors');
 const { recordAudit } = require('../lib/audit');
+const { requireOutboundEnabled } = require('../lib/killSwitch');
 
 module.exports = function chatsRoutes(transport) {
   const router = express.Router();
@@ -45,6 +46,7 @@ module.exports = function chatsRoutes(transport) {
     '/:id/send',
     rateLimit.send,
     requirePermission(PERMISSIONS.SEND_MESSAGE),
+    requireOutboundEnabled,
     validate({ params: idParam, body: messageBody }),
     async (req, res, next) => {
       try {

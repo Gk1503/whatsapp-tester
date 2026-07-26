@@ -1,8 +1,9 @@
 // Composition root: loads config (fails closed on unsafe settings), wires
-// middleware, mounts routes, bridges transport/scheduler events onto
+// middleware, mounts routes, bridges transport/scheduler/job events onto
 // Socket.IO, and handles graceful shutdown. Route logic lives in routes/,
 // WhatsApp access lives behind transports/, scheduling logic lives in
-// scheduler/ — this file only wires them together.
+// scheduler/, durable job processing lives in lib/jobs/ — this file only
+// wires them together.
 const path = require('node:path');
 const http = require('node:http');
 const express = require('express');
@@ -17,11 +18,22 @@ const { errorHandler } = require('./lib/errors');
 const { requirePermission } = require('./lib/auth/middleware');
 const { PERMISSIONS } = require('./lib/rbac');
 const { SqliteSessionStore, sweepExpiredSessions } = require('./lib/auth/sessionStore');
+const { sweepExpiredIdempotencyKeys } = require('./lib/idempotency');
 const { createTransport } = require('./transports');
+const { migrateSchedulesJsonIfNeeded } = require('./lib/migrateSchedulesJson');
 const Scheduler = require('./scheduler');
+const JobWorker = require('./lib/jobs/worker');
 
 const transport = createTransport();
-const scheduler = new Scheduler(transport, { file: config.schedulesFile, logger });
+
+migrateSchedulesJsonIfNeeded(config.schedulesFile, logger);
+
+const scheduler = new Scheduler(transport, { logger });
+const jobWorker = new JobWorker(transport, {
+  logger,
+  concurrency: Number(process.env.JOB_WORKER_CONCURRENCY) || 5,
+  onJobSettled: (job) => scheduler.onJobSettled(job)
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -85,6 +97,7 @@ app.use('/api/chats', require('./routes/chats')(transport));
 app.use('/api', require('./routes/messaging')(transport));
 app.use('/api', require('./routes/bulk')(transport));
 app.use('/api/schedules', require('./routes/schedules')(scheduler));
+app.use('/api/admin', require('./routes/admin')());
 
 app.use(errorHandler);
 
@@ -112,6 +125,12 @@ scheduler.on('scheduleUpdate', (schedule) => io.emit('scheduleUpdate', schedule)
 scheduler.on('scheduleRemoved', (id) => io.emit('scheduleRemoved', id));
 
 const sessionSweepInterval = setInterval(sweepExpiredSessions, 10 * 60 * 1000);
+const idempotencySweepInterval = setInterval(sweepExpiredIdempotencyKeys, 10 * 60 * 1000);
+
+// Crash recovery: any job items left claimed/running past their lease from a
+// prior crash are requeued before the worker starts claiming new work.
+jobWorker.recoverOnStartup();
+jobWorker.start();
 
 scheduler.start();
 transport.initialize().catch((err) => logger.error({ err }, 'transport_initialize_failed'));
@@ -123,20 +142,39 @@ server.listen(config.port, () => {
   );
 });
 
-// ---- Graceful shutdown ----
+// ---- Fatal error handling (Gate 56) ----
+// An unhandled rejection is contained (logged, process stays up) — most of
+// these come from Puppeteer/whatsapp-web.js background promises. An
+// uncaught *exception* means something escaped every try/catch in a
+// synchronous code path, which is a stronger signal of real corruption —
+// log it and exit non-zero rather than keep running in an unknown state;
+// process managers (or the operator, for a manual `npm start`) are expected
+// to restart it.
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'uncaught_exception_exiting');
+  process.exit(1);
+});
+
+// ---- Graceful shutdown v2 ----
+// Draining now also has to stop the job worker from claiming new items and
+// let in-flight claims finish within a bounded timeout before the process
+// exits, on top of the existing scheduler/Socket.IO/DB/transport teardown.
 let shuttingDown = false;
-function shutdown(signal) {
+async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info({ signal }, 'shutting_down');
 
   clearInterval(sessionSweepInterval);
+  clearInterval(idempotencySweepInterval);
   scheduler.stop();
 
   const forceExitTimer = setTimeout(() => {
     logger.warn('forced_exit_after_timeout');
     process.exit(1);
   }, 10000);
+
+  await jobWorker.drainAndStop(8000);
 
   server.close(async () => {
     io.close();

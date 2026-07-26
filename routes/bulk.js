@@ -8,6 +8,8 @@ const { validate, sendBulkBody, buildSheetBody } = require('../lib/validation/sc
 const rateLimit = require('../lib/rateLimit');
 const { TransportUnavailableError, UploadRejectedError } = require('../lib/errors');
 const { recordAudit } = require('../lib/audit');
+const { requireOutboundEnabled } = require('../lib/killSwitch');
+const { idempotent } = require('../lib/idempotency');
 const {
   NAME_KEYS,
   NUMBER_KEYS,
@@ -93,6 +95,8 @@ module.exports = function bulkRoutes(transport) {
     '/send-bulk',
     rateLimit.bulk,
     requirePermission(PERMISSIONS.BULK_SEND),
+    requireOutboundEnabled,
+    idempotent('send-bulk'),
     validate({ body: sendBulkBody }),
     async (req, res, next) => {
       const { rows, defaultMessage, delaySeconds } = req.body;

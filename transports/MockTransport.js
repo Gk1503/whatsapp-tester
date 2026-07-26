@@ -18,6 +18,21 @@ class MockTransport extends Transport {
     this.contacts = generateContacts(seed, contactCount);
     this.chats = generateChats(seed, chatCount, this.contacts);
     this._timers = [];
+    this._forcedOutcomes = new Map(); // recipient -> { status, remaining }
+  }
+
+  /**
+   * Deterministic failure injection for testing retry/circuit-breaker logic
+   * without depending on hash-based luck. The next `count` sendToNumbers()
+   * calls for `recipient` return `status` instead of the normal outcome;
+   * after that it reverts to the deterministic hash-based outcome.
+   */
+  forceOutcome(recipient, status, count = 1) {
+    this._forcedOutcomes.set(recipient, { status, remaining: count });
+  }
+
+  clearForcedOutcomes() {
+    this._forcedOutcomes.clear();
   }
 
   _setState(state, extra = {}) {
@@ -128,6 +143,12 @@ class MockTransport extends Transport {
   // a transient error, everything else "sent" — same recipient always maps
   // to the same outcome for a given seed, so benchmark/test runs are stable.
   _outcomeFor(recipient) {
+    const forced = this._forcedOutcomes.get(recipient);
+    if (forced && forced.remaining > 0) {
+      forced.remaining--;
+      if (forced.remaining === 0) this._forcedOutcomes.delete(recipient);
+      return forced.status;
+    }
     const h = hashString(`${this.seed}:${recipient}`);
     if (h % 7 === 0) return 'not_on_whatsapp';
     if (h % 13 === 0) return 'error';
