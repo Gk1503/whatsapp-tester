@@ -8,6 +8,8 @@
 </head>
 <body>
 
+<div class="test-mode-banner" id="testModeBanner" role="status">TEST MODE — mock WhatsApp, no real messages will be sent</div>
+
 <div class="shell">
 
   <!-- Sidebar -->
@@ -17,7 +19,7 @@
       <span class="brand-name">Tester</span>
     </div>
 
-    <div class="signal" id="signal">
+    <div class="signal" id="signal" role="status" aria-live="polite">
       <div class="signal-rings"><div class="signal-dot"></div></div>
       <div class="signal-text">
         <div class="signal-label" id="stateLabel">Starting…</div>
@@ -25,15 +27,43 @@
       </div>
     </div>
 
-    <nav class="nav" id="nav">
-      <button class="nav-item active" data-tab="chats">Chats</button>
-      <button class="nav-item" data-tab="contacts">Contacts</button>
-      <button class="nav-item" data-tab="groups">Groups</button>
-      <button class="nav-item" data-tab="compose">Send message</button>
-      <button class="nav-item" data-tab="bulk">Bulk (Excel)</button>
-      <button class="nav-item" data-tab="scheduler">Scheduler</button>
-      <button class="nav-item" data-tab="log">Live log</button>
+    <nav class="nav" id="nav" aria-label="Main">
+      <button class="nav-item active" data-tab="chats">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span class="nav-label">Chats</span>
+        <span class="nav-dot" id="navDotChats" hidden></span>
+      </button>
+      <button class="nav-item" data-tab="contacts">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="nav-label">Contacts</span>
+      </button>
+      <button class="nav-item" data-tab="groups">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span class="nav-label">Groups</span>
+      </button>
+      <button class="nav-item" data-tab="compose">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9 22 2Z"/></svg>
+        <span class="nav-label">Send message</span>
+      </button>
+      <button class="nav-item" data-tab="bulk">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+        <span class="nav-label">Bulk (Excel)</span>
+      </button>
+      <button class="nav-item" data-tab="scheduler">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        <span class="nav-label">Scheduler</span>
+      </button>
+      <button class="nav-item" data-tab="log">
+        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <span class="nav-label">Live log</span>
+        <span class="nav-dot" id="navDotLog" hidden></span>
+      </button>
     </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user" id="sidebarUser"></div>
+      <button id="logoutBtn" class="btn btn-secondary logout-btn">Log out</button>
+    </div>
   </aside>
 
   <!-- Main -->
@@ -42,8 +72,12 @@
     <!-- QR / connect screen -->
     <section id="connectScreen" class="connect-screen">
       <div class="connect-card">
-        <h1>Connect WhatsApp</h1>
-        <p class="muted">Open WhatsApp on your phone → Linked Devices → Link a device, then scan.</p>
+        <h1 class="text-h2">Connect WhatsApp</h1>
+        <ol class="connect-steps">
+          <li>Open WhatsApp on your phone</li>
+          <li>Go to Settings → Linked Devices → Link a device</li>
+          <li>Scan the code below</li>
+        </ol>
         <div class="qr-box" id="qrBox">
           <div class="qr-placeholder" id="qrPlaceholder">Waiting for QR code…</div>
           <img id="qrImage" alt="WhatsApp QR code" style="display:none" />
@@ -59,10 +93,10 @@
         <div class="chat-shell">
           <div class="chat-list-pane">
             <div class="chat-list-header">
-              <input type="text" id="chatSearch" placeholder="Search chats…" />
+              <input type="text" id="chatSearch" placeholder="Search chats…" aria-label="Search chats" />
             </div>
             <div class="chat-list" id="chatListEl">
-              <div class="muted" style="padding:16px">Loading chats…</div>
+              <div class="state-block">Loading chats…</div>
             </div>
           </div>
           <div class="chat-main-pane">
@@ -74,10 +108,12 @@
                 <div class="chat-avatar" id="chatHeaderAvatar"></div>
                 <div class="chat-thread-title" id="chatHeaderName"></div>
               </div>
-              <div class="chat-messages" id="chatMessages"></div>
+              <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
               <div class="chat-input-row">
-                <input type="text" id="chatInput" placeholder="Type a message" autocomplete="off" />
-                <button id="chatSendBtn" class="btn-primary">Send</button>
+                <input type="text" id="chatInput" placeholder="Type a message" autocomplete="off" aria-label="Message" />
+                <button id="chatSendBtn" class="btn btn-primary btn-icon-only" aria-label="Send message">
+                  <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9 22 2Z"/></svg>
+                </button>
               </div>
             </div>
           </div>
@@ -86,92 +122,104 @@
 
       <div class="tab-panel" data-panel="contacts">
         <div class="panel-header">
-          <h2>Contacts</h2>
-          <input type="text" id="contactSearch" placeholder="Search name or number…" />
+          <div>
+            <h2 class="text-h2">Contacts</h2>
+            <p class="panel-subtitle">Pick a contact to start a message</p>
+          </div>
+          <input type="text" id="contactSearch" placeholder="Search name or number…" aria-label="Search contacts" />
         </div>
         <div class="contact-list" id="contactList"></div>
       </div>
 
       <div class="tab-panel" data-panel="groups">
         <div class="panel-header">
-          <h2>Groups</h2>
-          <input type="text" id="groupSearch" placeholder="Search groups…" />
+          <div>
+            <h2 class="text-h2">Groups</h2>
+            <p class="panel-subtitle">Select one or more groups to message together</p>
+          </div>
+          <input type="text" id="groupSearch" placeholder="Search groups…" aria-label="Search groups" />
         </div>
 
         <div class="compose-grid">
           <div class="field">
-            <label>Select groups (<span id="groupSelectedCount">0</span> selected)</label>
+            <span class="field-label">Select groups (<span id="groupSelectedCount">0</span> selected)</span>
             <div class="contact-list" id="groupListEl">
-              <div class="muted" style="padding:16px">Loading groups…</div>
+              <div class="state-block">Loading groups…</div>
             </div>
           </div>
 
           <div class="field">
-            <label>Selected groups</label>
+            <span class="field-label">Selected groups</span>
             <div class="chips" id="groupChips"></div>
           </div>
 
           <div class="field">
-            <label>Message</label>
+            <label for="groupMessageBox" class="field-label">Message</label>
             <textarea id="groupMessageBox" rows="5" placeholder="Type your message…"></textarea>
           </div>
 
           <div class="field inline">
-            <label>Delay between sends</label>
-            <input type="number" id="groupDelaySeconds" value="3" min="0" style="width:80px" />
+            <label for="groupDelaySeconds" class="field-label">Delay between sends</label>
+            <input type="number" id="groupDelaySeconds" value="3" min="0" class="input-number" />
             <span class="hint">seconds (keeps sending human-paced)</span>
           </div>
 
-          <button id="groupSendBtn" class="btn-primary" disabled>Send to selected groups</button>
+          <button id="groupSendBtn" class="btn btn-primary" disabled>Send to selected groups</button>
 
-          <div class="results" id="groupResults"></div>
+          <div class="results" id="groupResults" aria-live="polite"></div>
         </div>
       </div>
 
       <div class="tab-panel" data-panel="compose">
         <div class="panel-header">
-          <h2>Send message</h2>
+          <div>
+            <h2 class="text-h2">Send message</h2>
+            <p class="panel-subtitle">Message one or more numbers at once</p>
+          </div>
         </div>
 
         <div class="compose-grid">
           <div class="field">
-            <label>Recipients</label>
+            <span class="field-label">Recipients</span>
             <div class="chips" id="chips"></div>
             <div class="add-number-row">
-              <input type="text" id="manualNumber" placeholder="Add number with country code, e.g. 91987xxxxxxx" />
-              <button id="addNumberBtn" class="btn-ghost">Add</button>
+              <input type="text" id="manualNumber" placeholder="Add number with country code, e.g. 91987xxxxxxx" aria-label="Add recipient number" />
+              <button id="addNumberBtn" class="btn btn-secondary">Add</button>
             </div>
             <div class="hint">Tip: click contacts on the left to add them here too.</div>
           </div>
 
           <div class="field">
-            <label>Message</label>
+            <label for="messageBox" class="field-label">Message</label>
             <textarea id="messageBox" rows="6" placeholder="Type your message…"></textarea>
           </div>
 
           <div class="field inline">
-            <label>Delay between sends</label>
-            <input type="number" id="delaySeconds" value="2" min="0" style="width:80px" />
+            <label for="delaySeconds" class="field-label">Delay between sends</label>
+            <input type="number" id="delaySeconds" value="2" min="0" class="input-number" />
             <span class="hint">seconds (keeps sending human-paced)</span>
           </div>
 
-          <button id="sendBtn" class="btn-primary">Send</button>
+          <button id="sendBtn" class="btn btn-primary" disabled>Send</button>
 
-          <div class="results" id="sendResults"></div>
+          <div class="results" id="sendResults" aria-live="polite"></div>
         </div>
       </div>
 
       <div class="tab-panel" data-panel="bulk">
         <div class="panel-header">
-          <h2>Bulk send from Excel/CSV</h2>
+          <div>
+            <h2 class="text-h2">Bulk send from Excel/CSV</h2>
+            <p class="panel-subtitle">One row per recipient, each with its own message</p>
+          </div>
         </div>
 
         <div class="compose-grid">
           <div class="field">
-            <label>Spreadsheet</label>
-            <div class="add-number-row">
-              <input type="file" id="sheetFile" accept=".xlsx,.xls,.csv" />
-              <button id="uploadSheetBtn" class="btn-ghost">Upload &amp; preview</button>
+            <span class="field-label">Spreadsheet</span>
+            <div class="dropzone">
+              <input type="file" id="sheetFile" accept=".xlsx,.xls,.csv" aria-label="Choose spreadsheet file" />
+              <button id="uploadSheetBtn" class="btn btn-secondary">Upload &amp; preview</button>
             </div>
             <div class="hint">
               Columns: <strong>Name</strong>, <strong>Number</strong> (with country code), <strong>Message</strong> — one row per recipient, each row can have its own message.
@@ -179,7 +227,7 @@
           </div>
 
           <div class="field">
-            <label>Message template</label>
+            <label for="bulkDefaultMessage" class="field-label">Message template</label>
             <div class="template-row">
               <div class="template-editor">
                 <textarea id="bulkDefaultMessage" rows="6" placeholder="Used for rows that have no Message column value… drag or click a field on the right to insert it, e.g. Hi {Name}!"></textarea>
@@ -193,17 +241,17 @@
           </div>
 
           <div class="field inline">
-            <label>Delay between sends</label>
-            <input type="number" id="bulkDelaySeconds" value="2" min="0" style="width:80px" />
+            <label for="bulkDelaySeconds" class="field-label">Delay between sends</label>
+            <input type="number" id="bulkDelaySeconds" value="2" min="0" class="input-number" />
             <span class="hint">seconds (keeps sending human-paced)</span>
           </div>
 
           <div class="field" id="bulkPreviewField" style="display:none">
-            <label>Preview (<span id="bulkRowCount">0</span> recipients)</label>
+            <span class="field-label">Preview (<span id="bulkRowCount">0</span> recipients)</span>
             <div class="bulk-table-wrap">
               <table class="bulk-table" id="bulkTable">
                 <thead>
-                  <tr><th>Name</th><th>Number</th><th>Message</th><th></th></tr>
+                  <tr><th>Name</th><th>Number</th><th>Message</th><th><span class="sr-only">Actions</span></th></tr>
                 </thead>
                 <tbody id="bulkTableBody"></tbody>
               </table>
@@ -211,80 +259,86 @@
           </div>
 
           <div class="bulk-actions">
-            <button id="bulkSendBtn" class="btn-primary" disabled>Send to all</button>
-            <button id="downloadSheetBtn" class="btn-ghost" disabled>Download filled sheet (.xlsx)</button>
+            <button id="bulkSendBtn" class="btn btn-primary" disabled>Send to all</button>
+            <button id="downloadSheetBtn" class="btn btn-secondary" disabled>Download filled sheet (.xlsx)</button>
           </div>
 
-          <div class="results" id="bulkResults"></div>
+          <div class="results" id="bulkResults" aria-live="polite"></div>
         </div>
       </div>
 
       <div class="tab-panel" data-panel="scheduler">
         <div class="panel-header">
-          <h2>Schedule a message</h2>
+          <div>
+            <h2 class="text-h2">Schedule a message</h2>
+            <p class="panel-subtitle">Send later, once or on a repeating interval</p>
+          </div>
         </div>
 
         <div class="compose-grid">
           <div class="field">
-            <label>Recipients</label>
+            <span class="field-label">Recipients</span>
             <div class="chips" id="schedChips"></div>
             <div class="add-number-row">
-              <input type="text" id="schedManualNumber" placeholder="Add number with country code, e.g. 91987xxxxxxx" />
-              <button id="schedAddNumberBtn" class="btn-ghost">Add</button>
+              <input type="text" id="schedManualNumber" placeholder="Add number with country code, e.g. 91987xxxxxxx" aria-label="Add recipient number" />
+              <button id="schedAddNumberBtn" class="btn btn-secondary">Add</button>
             </div>
           </div>
 
           <div class="field">
-            <label>Message</label>
+            <label for="schedMessage" class="field-label">Message</label>
             <textarea id="schedMessage" rows="4" placeholder="Type your message…"></textarea>
           </div>
 
           <div class="field inline">
-            <label>Send at</label>
+            <label for="schedDateTime" class="field-label">Send at</label>
             <input type="datetime-local" id="schedDateTime" />
           </div>
 
           <div class="field inline">
-            <label>Delay between recipients</label>
-            <input type="number" id="schedDelaySeconds" value="2" min="0" style="width:80px" />
+            <label for="schedDelaySeconds" class="field-label">Delay between recipients</label>
+            <input type="number" id="schedDelaySeconds" value="2" min="0" class="input-number" />
             <span class="hint">seconds</span>
           </div>
 
           <div class="field">
-            <label><input type="checkbox" id="schedRepeatEnabled" /> Repeat</label>
+            <label class="checkbox-row"><input type="checkbox" id="schedRepeatEnabled" /> Repeat</label>
             <div class="repeat-row" id="repeatRow" style="display:none">
               <span class="hint">Every</span>
-              <input type="number" id="schedEveryValue" value="1" min="1" style="width:60px" />
-              <select id="schedEveryUnit">
+              <input type="number" id="schedEveryValue" value="1" min="1" class="input-number-sm" aria-label="Repeat interval value" />
+              <select id="schedEveryUnit" aria-label="Repeat interval unit">
                 <option value="minutes">minutes</option>
                 <option value="hours">hours</option>
                 <option value="days">days</option>
                 <option value="weeks">weeks</option>
               </select>
               <span class="hint">until (optional)</span>
-              <input type="datetime-local" id="schedRepeatUntil" />
+              <input type="datetime-local" id="schedRepeatUntil" aria-label="Repeat until" />
             </div>
           </div>
 
-          <button id="scheduleBtn" class="btn-primary">Schedule message</button>
+          <button id="scheduleBtn" class="btn btn-primary" disabled>Schedule message</button>
 
-          <div class="results" id="scheduleFormResult"></div>
+          <div class="results" id="scheduleFormResult" aria-live="polite"></div>
         </div>
 
-        <div class="panel-header" style="margin-top:28px">
-          <h2>Upcoming &amp; recent</h2>
+        <div class="panel-header panel-header-secondary">
+          <h2 class="text-h3">Upcoming &amp; recent</h2>
         </div>
         <div class="schedule-list" id="scheduleList">
-          <div class="muted" style="padding:16px">No scheduled messages yet.</div>
+          <div class="state-block">No scheduled messages yet.</div>
         </div>
       </div>
 
       <div class="tab-panel" data-panel="log">
         <div class="panel-header">
-          <h2>Live incoming log</h2>
+          <div>
+            <h2 class="text-h2">Live incoming log</h2>
+            <p class="panel-subtitle">Updates in real time while this page is open</p>
+          </div>
         </div>
-        <div class="log-list" id="logList">
-          <div class="muted">Incoming messages will appear here while this page is open.</div>
+        <div class="log-list" id="logList" aria-live="polite">
+          <div class="state-block">Incoming messages will appear here while this page is open.</div>
         </div>
       </div>
 
@@ -292,6 +346,8 @@
 
   </main>
 </div>
+
+<div class="toast-stack" id="toastStack" aria-live="polite"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="app.js"></script>

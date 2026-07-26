@@ -1,17 +1,33 @@
 {
   "name": "whatsapp-tester",
-  "version": "1.0.0",
-  "description": "Self-hosted WhatsApp testing dashboard - QR login, contact search, message sending",
+  "version": "2.0.0",
+  "description": "Self-hosted WhatsApp testing dashboard - QR login, contact search, message sending, scheduling, and a mock-transport testing lab",
   "main": "server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --env-file=.env server.js",
+    "create-admin": "node --env-file=.env scripts/create-admin.js",
+    "test": "node --env-file=.env.test --test",
+    "benchmark": "node --env-file=.env.test benchmarks/run-benchmark.js"
   },
   "dependencies": {
     "express": "^4.19.2",
+    "express-rate-limit": "^7.4.1",
+    "express-session": "^1.18.1",
+    "helmet": "^7.2.0",
     "multer": "^2.2.0",
+    "pino": "^9.5.0",
     "qrcode": "^1.5.3",
     "socket.io": "^4.7.5",
     "whatsapp-web.js": "^1.26.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "autocannon": "^7.15.0",
+    "socket.io-client": "^4.8.3"
   }
 }

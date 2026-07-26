@@ -1,4 +1,52 @@
+// ---------- Session / CSRF ----------
+
+let csrfToken = null;
+
+async function apiFetch(url, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = new Headers(options.headers || {});
+  if (method !== 'GET' && method !== 'HEAD' && csrfToken) {
+    headers.set('X-CSRF-Token', csrfToken);
+  }
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    window.location.href = '/login.html';
+    throw new Error('Session expired — redirecting to login.');
+  }
+  return res;
+}
+
+async function bootstrapSession() {
+  const meRes = await apiFetch('/api/auth/me');
+  const me = await meRes.json();
+  csrfToken = me.csrfToken;
+  document.getElementById('sidebarUser').textContent = `${me.username} · ${me.role}`;
+
+  const statusRes = await apiFetch('/api/status');
+  const status = await statusRes.json();
+  document.getElementById('testModeBanner').classList.toggle('visible', status.transportMode === 'mock');
+}
+
+bootstrapSession();
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await apiFetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login.html';
+});
+
 const socket = io();
+
+const ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>';
+
+const toastStack = document.getElementById('toastStack');
+
+function showToast(message, type = '') {
+  const toast = document.createElement('div');
+  toast.className = 'toast' + (type ? ` toast-${type}` : '');
+  toast.textContent = message;
+  toastStack.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
 
 // ---------- Elements ----------
 const signalEl = document.getElementById('signal');
@@ -11,6 +59,9 @@ const qrPlaceholder = document.getElementById('qrPlaceholder');
 
 const nav = document.getElementById('nav');
 const panels = document.querySelectorAll('.tab-panel');
+const navDotChats = document.getElementById('navDotChats');
+const navDotLog = document.getElementById('navDotLog');
+let activeTab = 'chats';
 
 const contactSearch = document.getElementById('contactSearch');
 const contactList = document.getElementById('contactList');
@@ -154,23 +205,27 @@ nav.addEventListener('click', (e) => {
   const btn = e.target.closest('.nav-item');
   if (!btn) return;
   const tab = btn.dataset.tab;
+  activeTab = tab;
 
   nav.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b === btn));
   panels.forEach((p) => p.classList.toggle('active', p.dataset.panel === tab));
   appScreens.classList.toggle('wide-panel', tab === 'chats');
+
+  if (tab === 'chats') navDotChats.hidden = true;
+  if (tab === 'log') navDotLog.hidden = true;
 });
 
 // ---------- Contacts ----------
 
 async function loadContacts(search = '') {
-  contactList.innerHTML = '<div class="muted" style="padding:16px">Loading…</div>';
+  contactList.innerHTML = '<div class="state-block">Loading contacts…</div>';
   try {
-    const res = await fetch(`/api/contacts?search=${encodeURIComponent(search)}`);
+    const res = await apiFetch(`/api/contacts?search=${encodeURIComponent(search)}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load contacts');
 
     if (data.length === 0) {
-      contactList.innerHTML = '<div class="muted" style="padding:16px">No contacts found.</div>';
+      contactList.innerHTML = '<div class="state-block">No contacts found.</div>';
       return;
     }
 
@@ -179,18 +234,25 @@ async function loadContacts(search = '') {
       const row = document.createElement('div');
       row.className = 'contact-row';
       row.innerHTML = `
-        <span class="contact-name">${escapeHtml(c.name)}</span>
-        <span class="contact-number">${escapeHtml(c.number)}</span>
+        <span class="contact-row-main">
+          <span class="avatar-sm" style="background:${avatarColor(c.name)}">${escapeHtml(initials(c.name))}</span>
+          <span class="contact-row-text">
+            <span class="contact-name">${escapeHtml(c.name)}</span><br />
+            <span class="contact-number">${escapeHtml(c.number)}</span>
+          </span>
+        </span>
+        <button type="button" class="contact-action">Message</button>
       `;
-      row.addEventListener('click', () => {
+      const selectForCompose = () => {
         addRecipient(c.number, c.name);
         // jump to compose tab so the click feels immediate
         document.querySelector('.nav-item[data-tab="compose"]').click();
-      });
+      };
+      row.addEventListener('click', selectForCompose);
       contactList.appendChild(row);
     });
   } catch (err) {
-    contactList.innerHTML = `<div class="muted" style="padding:16px">${escapeHtml(err.message)}</div>`;
+    contactList.innerHTML = `<div class="state-block">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -204,13 +266,13 @@ contactSearch.addEventListener('input', () => {
 
 async function loadGroups(search = '') {
   try {
-    const res = await fetch(`/api/chats?search=${encodeURIComponent(search)}`);
+    const res = await apiFetch(`/api/chats?search=${encodeURIComponent(search)}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load groups');
     groupListData = data.filter((c) => c.isGroup);
     renderGroupList();
   } catch (err) {
-    groupListEl.innerHTML = `<div class="muted" style="padding:16px">${escapeHtml(err.message)}</div>`;
+    groupListEl.innerHTML = `<div class="state-block">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -229,16 +291,20 @@ function toggleGroupSelection(id, name) {
 
 function renderGroupList() {
   if (groupListData.length === 0) {
-    groupListEl.innerHTML = '<div class="muted" style="padding:16px">No groups found.</div>';
+    groupListEl.innerHTML = '<div class="state-block">No groups found.</div>';
     return;
   }
 
   groupListEl.innerHTML = '';
   groupListData.forEach((g) => {
+    const selected = selectedGroups.has(g.id);
     const row = document.createElement('div');
-    row.className = 'contact-row' + (selectedGroups.has(g.id) ? ' selected' : '');
+    row.className = 'contact-row' + (selected ? ' selected' : '');
     row.innerHTML = `
-      <span class="contact-name">${escapeHtml(g.name)}</span>
+      <span class="contact-row-main">
+        <input type="checkbox" class="contact-checkbox" ${selected ? 'checked' : ''} aria-label="Select ${escapeHtml(g.name)}" tabindex="-1" />
+        <span class="contact-row-text"><span class="contact-name">${escapeHtml(g.name)}</span></span>
+      </span>
       <span class="contact-number">${g.unreadCount ? g.unreadCount + ' unread' : ''}</span>
     `;
     row.addEventListener('click', () => toggleGroupSelection(g.id, g.name));
@@ -246,35 +312,39 @@ function renderGroupList() {
   });
 }
 
+function updateGroupSendBtnState() {
+  groupSendBtn.disabled = selectedGroups.size === 0 || !groupMessageBox.value.trim();
+}
+
 function renderGroupChips() {
   groupSelectedCount.textContent = selectedGroups.size;
-  groupSendBtn.disabled = selectedGroups.size === 0;
+  updateGroupSendBtnState();
 
   groupChips.innerHTML = '';
   selectedGroups.forEach((name, id) => {
     const chip = document.createElement('span');
     chip.className = 'chip';
-    chip.innerHTML = `${escapeHtml(name)} <button aria-label="Remove">×</button>`;
+    chip.innerHTML = `${escapeHtml(name)} <button aria-label="Remove ${escapeHtml(name)}">${ICON_CLOSE}</button>`;
     chip.querySelector('button').addEventListener('click', () => toggleGroupSelection(id, name));
     groupChips.appendChild(chip);
   });
 }
 
+groupMessageBox.addEventListener('input', updateGroupSendBtnState);
+
 groupSendBtn.addEventListener('click', async () => {
   const groupIds = Array.from(selectedGroups.keys());
   const message = groupMessageBox.value.trim();
 
-  if (groupIds.length === 0 || !message) {
-    groupResults.innerHTML = '<div class="result-row error">Select at least one group and write a message.</div>';
-    return;
-  }
+  if (groupIds.length === 0 || !message) return;
 
   groupSendBtn.disabled = true;
+  groupSendBtn.classList.add('is-loading');
   groupSendBtn.textContent = 'Sending…';
   groupResults.innerHTML = '';
 
   try {
-    const res = await fetch('/api/send-groups', {
+    const res = await apiFetch('/api/send-groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groupIds, message, delaySeconds: Number(groupDelaySeconds.value) || 0 })
@@ -291,7 +361,8 @@ groupSendBtn.addEventListener('click', async () => {
   } catch (err) {
     groupResults.innerHTML = `<div class="result-row error">${escapeHtml(err.message)}</div>`;
   } finally {
-    groupSendBtn.disabled = selectedGroups.size === 0;
+    groupSendBtn.classList.remove('is-loading');
+    updateGroupSendBtnState();
     groupSendBtn.textContent = 'Send to selected groups';
   }
 });
@@ -310,16 +381,23 @@ function removeRecipient(digits) {
   renderChips();
 }
 
+function updateSendBtnState() {
+  sendBtn.disabled = recipients.size === 0 || !messageBox.value.trim();
+}
+
 function renderChips() {
   chipsEl.innerHTML = '';
   recipients.forEach((label, digits) => {
     const chip = document.createElement('span');
     chip.className = 'chip';
-    chip.innerHTML = `${escapeHtml(label)} <button aria-label="Remove">×</button>`;
+    chip.innerHTML = `${escapeHtml(label)} <button aria-label="Remove ${escapeHtml(label)}">${ICON_CLOSE}</button>`;
     chip.querySelector('button').addEventListener('click', () => removeRecipient(digits));
     chipsEl.appendChild(chip);
   });
+  updateSendBtnState();
 }
+
+messageBox.addEventListener('input', updateSendBtnState);
 
 addNumberBtn.addEventListener('click', () => {
   const val = manualNumber.value.trim();
@@ -339,17 +417,15 @@ sendBtn.addEventListener('click', async () => {
   const numbers = Array.from(recipients.keys());
   const message = messageBox.value.trim();
 
-  if (numbers.length === 0 || !message) {
-    sendResults.innerHTML = '<div class="result-row error">Add at least one recipient and a message.</div>';
-    return;
-  }
+  if (numbers.length === 0 || !message) return;
 
   sendBtn.disabled = true;
+  sendBtn.classList.add('is-loading');
   sendBtn.textContent = 'Sending…';
   sendResults.innerHTML = '';
 
   try {
-    const res = await fetch('/api/send', {
+    const res = await apiFetch('/api/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ numbers, message, delaySeconds: Number(delaySeconds.value) || 0 })
@@ -366,8 +442,9 @@ sendBtn.addEventListener('click', async () => {
   } catch (err) {
     sendResults.innerHTML = `<div class="result-row error">${escapeHtml(err.message)}</div>`;
   } finally {
-    sendBtn.disabled = false;
+    sendBtn.classList.remove('is-loading');
     sendBtn.textContent = 'Send';
+    updateSendBtnState();
   }
 });
 
@@ -381,13 +458,14 @@ uploadSheetBtn.addEventListener('click', async () => {
   }
 
   uploadSheetBtn.disabled = true;
+  uploadSheetBtn.classList.add('is-loading');
   uploadSheetBtn.textContent = 'Reading…';
   bulkResults.innerHTML = '';
 
   try {
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch('/api/parse-sheet', { method: 'POST', body: formData });
+    const res = await apiFetch('/api/parse-sheet', { method: 'POST', body: formData });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not read that file');
 
@@ -403,6 +481,7 @@ uploadSheetBtn.addEventListener('click', async () => {
     bulkResults.innerHTML = `<div class="result-row error">${escapeHtml(err.message)}</div>`;
   } finally {
     uploadSheetBtn.disabled = false;
+    uploadSheetBtn.classList.remove('is-loading');
     uploadSheetBtn.textContent = 'Upload & preview';
   }
 });
@@ -462,7 +541,7 @@ function renderBulkTable() {
       <td>${escapeHtml(row.name || '—')}</td>
       <td class="mono">${escapeHtml(row.number)}</td>
       <td>${escapeHtml(resolved || '(empty — add a message template above)')}</td>
-      <td><button class="btn-ghost" data-i="${i}" aria-label="Remove row">×</button></td>
+      <td><button class="icon-remove" data-i="${i}" aria-label="Remove row">${ICON_CLOSE}</button></td>
     `;
     tr.querySelector('button').addEventListener('click', () => {
       bulkRows.splice(i, 1);
@@ -484,11 +563,12 @@ bulkSendBtn.addEventListener('click', async () => {
   }
 
   bulkSendBtn.disabled = true;
+  bulkSendBtn.classList.add('is-loading');
   bulkSendBtn.textContent = 'Sending…';
   bulkResults.innerHTML = '';
 
   try {
-    const res = await fetch('/api/send-bulk', {
+    const res = await apiFetch('/api/send-bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -510,6 +590,7 @@ bulkSendBtn.addEventListener('click', async () => {
     bulkResults.innerHTML = `<div class="result-row error">${escapeHtml(err.message)}</div>`;
   } finally {
     bulkSendBtn.disabled = false;
+    bulkSendBtn.classList.remove('is-loading');
     bulkSendBtn.textContent = 'Send to all';
   }
 });
@@ -518,11 +599,12 @@ downloadSheetBtn.addEventListener('click', async () => {
   if (bulkRows.length === 0) return;
 
   downloadSheetBtn.disabled = true;
+  downloadSheetBtn.classList.add('is-loading');
   downloadSheetBtn.textContent = 'Preparing…';
   bulkResults.innerHTML = '';
 
   try {
-    const res = await fetch('/api/build-sheet', {
+    const res = await apiFetch('/api/build-sheet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows: bulkRows, defaultMessage: bulkDefaultMessage.value.trim() })
@@ -541,10 +623,12 @@ downloadSheetBtn.addEventListener('click', async () => {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    showToast('Sheet downloaded.', 'success');
   } catch (err) {
     bulkResults.innerHTML = `<div class="result-row error">${escapeHtml(err.message)}</div>`;
   } finally {
     downloadSheetBtn.disabled = bulkRows.length === 0;
+    downloadSheetBtn.classList.remove('is-loading');
     downloadSheetBtn.textContent = 'Download filled sheet (.xlsx)';
   }
 });
@@ -563,15 +647,20 @@ function removeSchedRecipient(digits) {
   renderSchedChips();
 }
 
+function updateScheduleBtnState() {
+  scheduleBtn.disabled = schedRecipients.size === 0 || !schedMessage.value.trim() || !schedDateTime.value;
+}
+
 function renderSchedChips() {
   schedChips.innerHTML = '';
   schedRecipients.forEach((label, digits) => {
     const chip = document.createElement('span');
     chip.className = 'chip';
-    chip.innerHTML = `${escapeHtml(label)} <button aria-label="Remove">×</button>`;
+    chip.innerHTML = `${escapeHtml(label)} <button aria-label="Remove ${escapeHtml(label)}">${ICON_CLOSE}</button>`;
     chip.querySelector('button').addEventListener('click', () => removeSchedRecipient(digits));
     schedChips.appendChild(chip);
   });
+  updateScheduleBtnState();
 }
 
 schedAddNumberBtn.addEventListener('click', () => {
@@ -586,6 +675,10 @@ schedManualNumber.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') schedAddNumberBtn.click();
 });
 
+schedMessage.addEventListener('input', updateScheduleBtnState);
+schedDateTime.addEventListener('input', updateScheduleBtnState);
+schedDateTime.addEventListener('change', updateScheduleBtnState);
+
 schedRepeatEnabled.addEventListener('change', () => {
   repeatRow.style.display = schedRepeatEnabled.checked ? 'flex' : 'none';
 });
@@ -594,11 +687,7 @@ scheduleBtn.addEventListener('click', async () => {
   const recipientList = Array.from(schedRecipients, ([number, name]) => ({ number, name }));
   const message = schedMessage.value.trim();
 
-  if (recipientList.length === 0 || !message || !schedDateTime.value) {
-    scheduleFormResult.innerHTML =
-      '<div class="result-row error">Add at least one recipient, a message, and a send time.</div>';
-    return;
-  }
+  if (recipientList.length === 0 || !message || !schedDateTime.value) return;
 
   const payload = {
     recipients: recipientList,
@@ -615,10 +704,11 @@ scheduleBtn.addEventListener('click', async () => {
   };
 
   scheduleBtn.disabled = true;
+  scheduleBtn.classList.add('is-loading');
   scheduleFormResult.innerHTML = '';
 
   try {
-    const res = await fetch('/api/schedules', {
+    const res = await apiFetch('/api/schedules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -633,17 +723,18 @@ scheduleBtn.addEventListener('click', async () => {
     schedRepeatEnabled.checked = false;
     repeatRow.style.display = 'none';
     schedRepeatUntil.value = '';
-    scheduleFormResult.innerHTML = '<div class="result-row sent">Scheduled.</div>';
+    showToast('Message scheduled.', 'success');
   } catch (err) {
     scheduleFormResult.innerHTML = `<div class="result-row error">${escapeHtml(err.message)}</div>`;
   } finally {
-    scheduleBtn.disabled = false;
+    scheduleBtn.classList.remove('is-loading');
+    updateScheduleBtnState();
   }
 });
 
 async function loadSchedules() {
   try {
-    const res = await fetch('/api/schedules');
+    const res = await apiFetch('/api/schedules');
     schedules = await res.json();
     renderScheduleList();
   } catch (err) {
@@ -666,7 +757,7 @@ function describeLastResult(schedule) {
 
 function renderScheduleList() {
   if (schedules.length === 0) {
-    scheduleList.innerHTML = '<div class="muted" style="padding:16px">No scheduled messages yet.</div>';
+    scheduleList.innerHTML = '<div class="state-block">No scheduled messages yet.</div>';
     return;
   }
 
@@ -687,10 +778,20 @@ function renderScheduleList() {
         <div class="schedule-message">${escapeHtml(schedule.message)}</div>
         <div class="hint">${escapeHtml(describeRepeat(schedule))}${schedule.lastResult ? ' · ' + escapeHtml(describeLastResult(schedule)) : ''}</div>
       </div>
-      <button class="btn-ghost schedule-cancel" data-id="${schedule.id}">Cancel</button>
+      <button class="btn btn-danger schedule-cancel" data-id="${schedule.id}">Cancel</button>
     `;
-    row.querySelector('.schedule-cancel').addEventListener('click', async () => {
-      await fetch(`/api/schedules/${schedule.id}`, { method: 'DELETE' });
+    row.querySelector('.schedule-cancel').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      try {
+        await apiFetch(`/api/schedules/${schedule.id}`, { method: 'DELETE' });
+        // the row is removed once the 'scheduleRemoved' socket event arrives
+      } catch (err) {
+        btn.disabled = false;
+        btn.classList.remove('is-loading');
+        showToast('Could not cancel that schedule — try again.', 'error');
+      }
     });
     scheduleList.appendChild(row);
   });
@@ -712,7 +813,7 @@ loadSchedules();
 
 // ---------- Chats (live conversations) ----------
 
-const AVATAR_COLORS = ['#1F9D55', '#B45309', '#2563EB', '#C0362C', '#7C3AED', '#0F766E', '#BE185D'];
+const AVATAR_COLORS = ['#4F46E5', '#0F766E', '#B45309', '#C0362C', '#7C3AED', '#2563EB', '#BE185D'];
 
 function initials(name) {
   const parts = String(name).trim().split(/\s+/);
@@ -746,13 +847,13 @@ function formatDayLabel(ts) {
 
 async function loadChats(search = '') {
   try {
-    const res = await fetch(`/api/chats?search=${encodeURIComponent(search)}`);
+    const res = await apiFetch(`/api/chats?search=${encodeURIComponent(search)}`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load chats');
     chatListData = data;
     renderChatList();
   } catch (err) {
-    chatListEl.innerHTML = `<div class="muted" style="padding:16px">${escapeHtml(err.message)}</div>`;
+    chatListEl.innerHTML = `<div class="state-block">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -764,7 +865,7 @@ chatSearch.addEventListener('input', () => {
 
 function renderChatList() {
   if (chatListData.length === 0) {
-    chatListEl.innerHTML = '<div class="muted" style="padding:16px">No chats yet.</div>';
+    chatListEl.innerHTML = '<div class="state-block">No chats yet.</div>';
     return;
   }
 
@@ -805,18 +906,18 @@ async function openChat(chatId, name) {
   chatHeaderAvatar.textContent = initials(name);
   chatHeaderAvatar.style.background = avatarColor(name);
   chatHeaderName.textContent = name;
-  chatMessages.innerHTML = '<div class="muted" style="padding:16px">Loading…</div>';
+  chatMessages.innerHTML = '<div class="state-block">Loading messages…</div>';
 
   const chatEntry = chatListData.find((c) => c.id === chatId);
   if (chatEntry) chatEntry.unreadCount = 0;
 
   try {
-    const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}/messages`);
+    const res = await apiFetch(`/api/chats/${encodeURIComponent(chatId)}/messages`);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed to load messages');
     renderMessages(data);
   } catch (err) {
-    chatMessages.innerHTML = `<div class="muted" style="padding:16px">${escapeHtml(err.message)}</div>`;
+    chatMessages.innerHTML = `<div class="state-block">${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -852,8 +953,9 @@ async function sendChatMessage() {
 
   chatInput.value = '';
   chatSendBtn.disabled = true;
+  chatSendBtn.classList.add('is-loading');
   try {
-    const res = await fetch(`/api/chats/${encodeURIComponent(activeChatId)}/send`, {
+    const res = await apiFetch(`/api/chats/${encodeURIComponent(activeChatId)}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message })
@@ -868,6 +970,7 @@ async function sendChatMessage() {
     );
   } finally {
     chatSendBtn.disabled = false;
+    chatSendBtn.classList.remove('is-loading');
   }
 }
 
@@ -891,13 +994,15 @@ socket.on('chatMessage', (msg) => {
   if (msg.chatId === activeChatId) {
     appendBubble(msg);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+  } else if (!msg.fromMe && activeTab !== 'chats') {
+    navDotChats.hidden = false;
   }
 });
 
 // ---------- Live log ----------
 
 socket.on('incoming', ({ from, body, timestamp }) => {
-  const empty = logList.querySelector('.muted');
+  const empty = logList.querySelector('.state-block');
   if (empty) empty.remove();
 
   const row = document.createElement('div');
@@ -905,6 +1010,8 @@ socket.on('incoming', ({ from, body, timestamp }) => {
   const time = new Date(timestamp * 1000).toLocaleTimeString();
   row.innerHTML = `<div class="log-from">${escapeHtml(from)} · ${time}</div><div>${escapeHtml(body)}</div>`;
   logList.prepend(row);
+
+  if (activeTab !== 'log') navDotLog.hidden = false;
 });
 
 // ---------- Utils ----------

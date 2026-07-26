@@ -1,0 +1,186 @@
+{
+  "timestamp": "2026-07-26T12:30:31.050Z",
+  "environment": {
+    "node": "v25.9.0",
+    "platform": "win32",
+    "arch": "x64",
+    "cpus": 12,
+    "totalMemGB": 12,
+    "gitCommit": "6219a19"
+  },
+  "transportMode": "mock",
+  "mockSeed": "12345",
+  "scenarios": [
+    {
+      "title": "health_live_c1",
+      "connections": 1,
+      "durationSec": 5.01,
+      "requests": {
+        "total": 4263,
+        "average": 852.6
+      },
+      "latencyMs": {
+        "p50": 1,
+        "p90": 1,
+        "p95": 1,
+        "p99": 2,
+        "max": 11
+      },
+      "errors": 0,
+      "timeouts": 0,
+      "non2xx": 0
+    },
+    {
+      "title": "health_live_c10",
+      "connections": 10,
+      "durationSec": 5.01,
+      "requests": {
+        "total": 8235,
+        "average": 1647
+      },
+      "latencyMs": {
+        "p50": 5,
+        "p90": 8,
+        "p95": 12,
+        "p99": 16,
+        "max": 25
+      },
+      "errors": 0,
+      "timeouts": 0,
+      "non2xx": 0
+    },
+    {
+      "title": "health_live_c50",
+      "connections": 50,
+      "durationSec": 5.02,
+      "requests": {
+        "total": 9346,
+        "average": 1869.4
+      },
+      "latencyMs": {
+        "p50": 24,
+        "p90": 34,
+        "p95": 45,
+        "p99": 66,
+        "max": 95
+      },
+      "errors": 0,
+      "timeouts": 0,
+      "non2xx": 0
+    },
+    {
+      "title": "api_contacts_c1",
+      "connections": 1,
+      "durationSec": 5,
+      "requests": {
+        "total": 1681,
+        "average": 336.2
+      },
+      "latencyMs": {
+        "p50": 2,
+        "p90": 3,
+        "p95": 3,
+        "p99": 4,
+        "max": 43
+      },
+      "errors": 0,
+      "timeouts": 0,
+      "non2xx": 0
+    },
+    {
+      "title": "api_contacts_c10",
+      "connections": 10,
+      "durationSec": 5.05,
+      "requests": {
+        "total": 2030,
+        "average": 406
+      },
+      "latencyMs": {
+        "p50": 24,
+        "p90": 27,
+        "p95": 33,
+        "p99": 37,
+        "max": 39
+      },
+      "errors": 0,
+      "timeouts": 0,
+      "non2xx": 0
+    },
+    {
+      "title": "api_contacts_c50",
+      "connections": 50,
+      "durationSec": 5.31,
+      "requests": {
+        "total": 2050,
+        "average": 410
+      },
+      "latencyMs": {
+        "p50": 123,
+        "p90": 134,
+        "p95": 167,
+        "p99": 190,
+        "max": 193
+      },
+      "errors": 0,
+      "timeouts": 0,
+      "non2xx": 0
+    },
+    {
+      "title": "api_chats_c1",
+      "connections": 1,
+      "durationSec": 5,
+      "requests": {
+        "total": 1723,
+        "average": 344.6
+      },
+      "latencyMs": {
+        "p50": 2,
+        "p90": 3,
+        "p95": 3,
+        "p99": 4,
+        "max": 15
+      },
+      "errors": 0,
+      "timeouts": 0,
+      "non2xx": 0
+    },
+    {
+      "title": "api_chats_c10",
+      "connections": 10,
+      "durationSec": 5.04,
+      "requests": {
+        "total": 2010,
+        "average": 402
+      },
+      "latencyMs": {
+        "p50": 24,
+        "p90": 28,
+        "p95": 32,
+        "p99": 37,
+        "max": 44
+      },
+      "errors": 0,
+      "timeouts": 0,
+      "non2xx": 0
+    },
+    {
+      "title": "api_chats_c50",
+      "connections": 50,
+      "durationSec": 5.11,
+      "requests": {
+        "total": 2050,
+        "average": 410
+      },
+      "latencyMs": {
+        "p50": 122,
+        "p90": 135,
+        "p95": 143,
+        "p99": 176,
+        "max": 176
+      },
+      "errors": 0,
+      "timeouts": 0,
+      "non2xx": 0
+    }
+  ]
+}

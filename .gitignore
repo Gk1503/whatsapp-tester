@@ -3,3 +3,5 @@ session/
 .env
 schedules.json
 .wwebjs_cache/
+data/
+*.log
